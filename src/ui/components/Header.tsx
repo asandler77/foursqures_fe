@@ -20,127 +20,110 @@ export const Header = ({ state, onRestart }: Props) => {
   return (
     <View style={styles.root}>
       <View style={styles.topRow}>
-        <Text style={styles.title}>Four Squares</Text>
+        <Text style={styles.titleSmall}>Four Squares</Text>
         <Pressable
           accessibilityRole="button"
           onPress={onRestart}
           style={({ pressed }) => [styles.restartButton, pressed && styles.restartButtonPressed]}>
-          <Text style={styles.restartButtonText}>Restart</Text>
+          <Text style={styles.restartButtonText}>⟲ New Game</Text>
         </Pressable>
       </View>
 
-      <View style={styles.turnTabs}>
-        <View style={[styles.tab, isP1 && styles.tabActiveP1]}>
-          <View style={[styles.dot, styles.dotP1]} />
-          <Text style={[styles.tabText, isP1 && styles.tabTextActive]}>
-            {isP1 ? "Player 1's Turn" : 'Player 1'}
-          </Text>
-        </View>
-        <View style={[styles.tab, !isP1 && styles.tabActiveP2]}>
-          <View style={[styles.dot, styles.dotP2]} />
-          <Text style={[styles.tabText, !isP1 && styles.tabTextActive]}>
-            {!isP1 ? "Player 2's Turn" : 'Player 2'}
-          </Text>
-        </View>
+      <View style={[styles.turnPill, isP1 ? styles.turnPillP1 : styles.turnPillP2]}>
+        <View style={[styles.turnDot, isP1 ? styles.turnDotP1 : styles.turnDotP2]} />
+        <Text style={styles.turnText}>{isP1 ? 'Turn: Player 1' : 'Turn: Player 2'}</Text>
       </View>
 
-      {state.winner ? (
-        <Text style={styles.meta}>
-          Winner:{' '}
-          <Text style={[styles.metaStrong, state.winner === 'R' ? styles.redText : styles.blueText]}>
-            {playerName(state.winner)}
-          </Text>
-        </Text>
-      ) : state.drawReason ? (
-        <Text style={styles.meta}>
-          Result: <Text style={styles.metaStrong}>Draw</Text>
-        </Text>
-      ) : (
-        <Text style={styles.meta}>
-          Phase:{' '}
-          <Text style={styles.metaStrong}>
-            {state.phase === 'placement'
-              ? 'Placement'
-              : state.phase === 'placementSlide'
-                ? 'Placement (Slide)'
-                : 'Movement'}
-          </Text>
-        </Text>
-      )}
-
-      <Text style={styles.metaSmall}>
-        Remaining — Player 1: <Text style={styles.metaStrong}>{remainingR}</Text> • Player 2:{' '}
-        <Text style={styles.metaStrong}>{remainingB}</Text>
-      </Text>
-
-      {state.drawReason ? <Text style={styles.notice}>{state.drawReason}</Text> : null}
-      <Text style={styles.notice} numberOfLines={2}>
-        {state.winner || state.drawReason
-          ? ' '
-          : state.phase === 'placement'
-            ? 'Place a piece in any slot (not in the empty square).'
-            : state.phase === 'placementSlide'
-              ? 'Now slide: tap a highlighted square to move it into the empty space.'
-              : 'Slide a square into the empty space: tap a highlighted neighboring square.'}
-      </Text>
+      <View style={styles.countRow}>
+        <View style={styles.countGroup}>
+          <View style={[styles.countDot, styles.countDotP1]} />
+          <Text style={styles.countText}>{remainingR}</Text>
+        </View>
+        <View style={styles.countDivider} />
+        <View style={styles.countGroup}>
+          <View style={[styles.countDot, styles.countDotP2]} />
+          <Text style={styles.countText}>{remainingB}</Text>
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  root: { gap: 10 },
+  root: { gap: 8 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
 
-  title: { fontSize: 25, fontWeight: '700', color: colors.text },
-  meta: { fontSize: 20, color: '#374151' },
-  metaSmall: { fontSize: 18, color: '#374151' },
-  metaStrong: { fontWeight: '700', color: colors.text },
-  redText: { color: colors.red },
-  blueText: { color: colors.blue },
-  notice: { marginTop: 3, fontSize: 17, lineHeight: 21, minHeight: 42, color: colors.textMuted },
-
+  titleSmall: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.2,
+  },
   restartButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: colors.black,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
   },
   restartButtonPressed: { opacity: 0.85 },
-  restartButtonText: { color: 'white', fontWeight: '700', fontSize: 20 },
+  restartButtonText: { color: colors.text, fontWeight: '700', fontSize: 13 },
 
-  turnTabs: {
+  turnPill: {
     flexDirection: 'row',
-    borderRadius: 10,
-    backgroundColor: colors.tabBg,
-    borderWidth: 1,
-    borderColor: colors.tabBorder,
-    overflow: 'hidden',
+    alignItems: 'center',
+    gap: 10,
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+  turnPillP1: { backgroundColor: colors.tabRed },
+  turnPillP2: { backgroundColor: colors.tabBlue },
+  turnDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  turnDotP1: { backgroundColor: colors.redPiece },
+  turnDotP2: { backgroundColor: colors.bluePiece },
+  turnText: { color: 'white', fontWeight: '700', fontSize: 17 },
+
+  countRow: {
+    marginTop: 2,
     flexDirection: 'row',
-    gap: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  tabActiveP1: { backgroundColor: colors.tabRed },
-  tabActiveP2: { backgroundColor: colors.tabBlue },
-  tabText: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
-  tabTextActive: { color: 'white' },
-  dot: {
+  countGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  countDot: {
     width: 12,
     height: 12,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.75)',
   },
-  dotP1: { backgroundColor: colors.redPiece },
-  dotP2: { backgroundColor: 'white', borderColor: 'rgba(0,0,0,0.15)' },
+  countDotP1: { backgroundColor: colors.redPiece },
+  countDotP2: { backgroundColor: colors.bluePiece },
+  countText: { fontSize: 18, fontWeight: '700', color: colors.text },
+  countDivider: { width: 1, height: 18, backgroundColor: colors.border },
 });
 

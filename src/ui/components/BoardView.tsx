@@ -6,7 +6,7 @@ import { colors } from '../theme';
 import { Slot } from './Slot';
 
 const INNER_TILE_PADDING = 6;
-const SLIDE_DURATION_MS = 500;
+const SLIDE_DURATION_MS = 800;
 
 type Props = Readonly<{
   board: Board;

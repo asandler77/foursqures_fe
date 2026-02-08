@@ -8,6 +8,7 @@ type AIOptions = Readonly<{
 }>;
 
 const otherPlayer = (p: Player): Player => (p === 'R' ? 'B' : 'R');
+const RANDOM_MOVE_CHANCE = 0.4;
 
 const getSlotAt = (board: GameState['board'], globalRow: number, globalCol: number): SlotValue => {
   const squareRow = Math.floor(globalRow / 2);
@@ -116,6 +117,10 @@ export const computeBestAction = (
   };
 
   const actions = getPossibleActions(state);
+  if (actions.length === 0) return null;
+  if (Math.random() < RANDOM_MOVE_CHANCE) {
+    return actions[Math.floor(Math.random() * actions.length)];
+  }
   for (const action of actions) {
     if (Date.now() >= deadline) break;
     const next = reducer(state, action);
