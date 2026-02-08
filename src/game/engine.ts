@@ -43,6 +43,9 @@ export const getValidDestinationsForSelected = (state: GameState): Pos[] => {
   // During sliding steps (placementSlide and movement):
   // Highlight all movable big squares (adjacent to hole).
   if (state.phase === 'placementSlide' || state.phase === 'movement') {
+    if (state.legalSlides && state.legalSlides.length > 0) {
+      return state.legalSlides.flatMap(allSlotsInSquare);
+    }
     return getMovableSquareIndices(state.holeSquareIndex)
       .filter(squareIndex => squareIndex !== state.lastMovedSquareIndex)
       .flatMap(allSlotsInSquare);

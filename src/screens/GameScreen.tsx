@@ -160,10 +160,20 @@ export const GameScreen = () => {
       (activeState.phase === 'placementSlide' || activeState.phase === 'movement') &&
       activeState.lastMovedSquareIndex !== null &&
       squareIndex === activeState.lastMovedSquareIndex;
+    const hasLegalSlides =
+      activeState &&
+      (activeState.phase === 'placementSlide' || activeState.phase === 'movement') &&
+      Array.isArray(activeState.legalSlides) &&
+      activeState.legalSlides.length > 0;
+    const isLegalSlide = !hasLegalSlides || activeState?.legalSlides?.includes(squareIndex);
 
     if (mode === 'local') {
       if (isRepeatMove) {
         setLocalError('You cannot move the same square twice in a row.');
+        return;
+      }
+      if (!isLegalSlide) {
+        setLocalError('This square cannot be moved now.');
         return;
       }
       setLocalError(null);
@@ -173,6 +183,10 @@ export const GameScreen = () => {
     if (!serverInfo || !serverState || isLoading || turnCooldown) return;
     if (isRepeatMove) {
       setServerError('You cannot move the same square twice in a row.');
+      return;
+    }
+    if (!isLegalSlide) {
+      setServerError('This square cannot be moved now.');
       return;
     }
 

@@ -18,6 +18,8 @@ export type GameState = Readonly<{
   holeSquareIndex: number;
   selectedSquareIndex: number | null;
   lastMovedSquareIndex: number | null;
+  blockedSlideSquareIndex?: number | null;
+  legalSlides?: ReadonlyArray<number> | null;
   winner: Player | null;
   drawReason: string | null;
 }>;

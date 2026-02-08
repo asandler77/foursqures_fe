@@ -1,6 +1,6 @@
 import type { GameState } from '../game/types';
 import { DEFAULT_PIECES_PER_PLAYER } from '../game/engine';
-import { BASE_URL } from './config';
+import { getBaseUrl } from './config';
 
 type CreateGameResponse = Readonly<{
   gameId: string;
@@ -13,10 +13,26 @@ type MoveResponse = Readonly<{
   error?: string;
 }>;
 
-const normalizeState = (state: GameState): GameState => ({
-  ...state,
-  lastMovedSquareIndex: state.lastMovedSquareIndex ?? null,
-});
+const normalizeState = (state: GameState): GameState => {
+  const anyState = state as GameState & {
+    forbiddenSquareIndex?: number | null;
+    lastMovedSquareIndex?: number | null;
+    blockedSlideSquareIndex?: number | null;
+    legalSlides?: ReadonlyArray<number> | null;
+  };
+
+  return {
+    ...state,
+    lastMovedSquareIndex:
+      anyState.lastMovedSquareIndex ??
+      anyState.blockedSlideSquareIndex ??
+      anyState.forbiddenSquareIndex ??
+      null,
+    blockedSlideSquareIndex:
+      anyState.blockedSlideSquareIndex ?? anyState.lastMovedSquareIndex ?? null,
+    legalSlides: anyState.legalSlides ?? null,
+  };
+};
 
 const requestJson = async <T>(url: string, options: RequestInit): Promise<T> => {
   const res = await fetch(url, options);
@@ -29,14 +45,14 @@ const requestJson = async <T>(url: string, options: RequestInit): Promise<T> => 
 };
 
 export const createGame = async (): Promise<CreateGameResponse> =>
-  requestJson<CreateGameResponse>(`${BASE_URL}/games`, {
+  requestJson<CreateGameResponse>(`${getBaseUrl()}/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ piecesPerPlayer: DEFAULT_PIECES_PER_PLAYER }),
   }).then(res => ({ ...res, state: normalizeState(res.state) }));
 
 export const restartGame = async (gameId: string, playerToken: string): Promise<GameState> => {
-  const res = await requestJson<{ state: GameState }>(`${BASE_URL}/games/${gameId}/restart`, {
+  const res = await requestJson<{ state: GameState }>(`${getBaseUrl()}/games/${gameId}/restart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ playerToken }),
@@ -50,7 +66,7 @@ export const placePiece = async (
   squareIndex: number,
   slotIndex: number,
 ): Promise<GameState> => {
-  const res = await requestJson<{ state: GameState }>(`${BASE_URL}/games/${gameId}/move`, {
+  const res = await requestJson<{ state: GameState }>(`${getBaseUrl()}/games/${gameId}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'place', squareIndex, slotIndex, playerToken }),
@@ -64,7 +80,7 @@ export const slideSquare = async (
   fromSquareIndex: number,
   toHoleSquareIndex: number,
 ): Promise<GameState> => {
-  const res = await requestJson<{ state: GameState }>(`${BASE_URL}/games/${gameId}/move`, {
+  const res = await requestJson<{ state: GameState }>(`${getBaseUrl()}/games/${gameId}/move`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
