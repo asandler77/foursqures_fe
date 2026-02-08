@@ -8,59 +8,28 @@ export const createEmptyBoard = (): Board =>
 
 export const otherPlayer = (p: Player): Player => (p === 'R' ? 'B' : 'R');
 
-const getMiniFromBig = (
-  board: Board,
-  bigRow: number,
-  bigCol: number,
-  miniRow: 0 | 1,
-  miniCol: 0 | 1,
-): SlotValue => {
-    const squareIndex = squareIndexFromRowCol(bigRow, bigCol);
-  const slotIndex = miniRow * 2 + miniCol;
-    return board[squareIndex]?.[slotIndex] ?? null;
-};
-
 export const checkWinner = (board: Board): Player | null => {
-  const isSolid2x2 = (a: SlotValue, b: SlotValue, c: SlotValue, d: SlotValue) =>
-    a !== null && a === b && a === c && a === d;
+  // Win rule:
+  // If anywhere on the overall 6x6 mini-grid there is a solid 2x2 block
+  // of the same color, that player wins (including across 4 squares).
+  const at = (globalRow: number, globalCol: number): SlotValue => {
+    const squareRow = Math.floor(globalRow / 2);
+    const squareCol = Math.floor(globalCol / 2);
+    const miniRow = (globalRow % 2) as 0 | 1;
+    const miniCol = (globalCol % 2) as 0 | 1;
+    const squareIndex = squareIndexFromRowCol(squareRow, squareCol);
+    const slotIndex = miniRow * 2 + miniCol;
+    return board[squareIndex]?.[slotIndex] ?? null;
+  };
 
-  // Horizontal adjacent big-square pairs: (bigRow 0..2) x (leftBigCol 0..1)
-  // Pair forms a 2x4 mini area; check all 2x2 sub-blocks (startCol 0..2).
-  for (let bigRow = 0; bigRow < 3; bigRow++) {
-    for (let leftBigCol = 0; leftBigCol < 2; leftBigCol++) {
-      const get = (r: 0 | 1, c: 0 | 1 | 2 | 3) => {
-        const bigCol = c < 2 ? leftBigCol : leftBigCol + 1;
-        const miniCol = (c < 2 ? c : (c - 2)) as 0 | 1;
-        return getMiniFromBig(board, bigRow, bigCol, r, miniCol);
-      };
-
-      for (let startCol = 0 as 0 | 1 | 2; startCol <= 2; startCol++) {
-        const a = get(0, startCol);
-        const b = get(0, (startCol + 1) as 0 | 1 | 2 | 3);
-        const c = get(1, startCol);
-        const d = get(1, (startCol + 1) as 0 | 1 | 2 | 3);
-        if (isSolid2x2(a, b, c, d)) return a;
-      }
-    }
-  }
-
-  // Vertical adjacent big-square pairs: (topBigRow 0..1) x (bigCol 0..2)
-  // Pair forms a 4x2 mini area; check all 2x2 sub-blocks (startRow 0..2).
-  for (let topBigRow = 0; topBigRow < 2; topBigRow++) {
-    for (let bigCol = 0; bigCol < 3; bigCol++) {
-      const get = (r: 0 | 1 | 2 | 3, c: 0 | 1) => {
-        const bigRow = r < 2 ? topBigRow : topBigRow + 1;
-        const miniRow = (r < 2 ? r : (r - 2)) as 0 | 1;
-        return getMiniFromBig(board, bigRow, bigCol, miniRow, c);
-      };
-
-      for (let startRow = 0 as 0 | 1 | 2; startRow <= 2; startRow++) {
-        const a = get(startRow, 0);
-        const b = get(startRow, 1);
-        const c = get((startRow + 1) as 0 | 1 | 2 | 3, 0);
-        const d = get((startRow + 1) as 0 | 1 | 2 | 3, 1);
-        if (isSolid2x2(a, b, c, d)) return a;
-      }
+  for (let r = 0; r <= 4; r++) {
+    for (let c = 0; c <= 4; c++) {
+      const a = at(r, c);
+      if (a === null) continue;
+      const b = at(r, c + 1);
+      const c2 = at(r + 1, c);
+      const d = at(r + 1, c + 1);
+      if (a === b && a === c2 && a === d) return a;
     }
   }
 

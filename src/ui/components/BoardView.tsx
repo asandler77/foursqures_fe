@@ -29,12 +29,16 @@ export const BoardView = ({
   onPressSquare,
   enableSquarePress = false,
 }: Props) => {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const validSet = useMemo(() => new Set(validDestinations.map(keyOf)), [validDestinations]);
 
   const containerHorizontalPadding = 32; // GameScreen uses padding 16 left/right
-  const boardMax = 420;
-  const boardSize = Math.min(boardMax, windowWidth - containerHorizontalPadding);
+  const shortSide = Math.min(windowWidth, windowHeight);
+  const isTablet = shortSide >= 900;
+  const maxByWidth = windowWidth - containerHorizontalPadding;
+  const maxByHeight = windowHeight - (isTablet ? 260 : 0);
+  const boardMax = isTablet ? Math.min(maxByWidth, maxByHeight) : 420;
+  const boardSize = Math.min(boardMax, maxByWidth);
 
   const bigGap = 10;
   const bigCellSize = (boardSize - bigGap * 2) / 3;

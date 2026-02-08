@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createInitialState, getValidDestinationsForSelected, reducer } from '../game/engine';
 import type { GameState } from '../game/types';
+import { computeBestAction } from '../game/ai';
 import { createGame, placePiece, restartGame, slideSquare } from '../api/gameApi';
 import { BoardView } from '../ui/components/BoardView';
 import { Header } from '../ui/components/Header';
@@ -12,6 +13,8 @@ import { colors, spacing } from '../ui/theme';
 type PlayMode = 'local' | 'server';
 const SERVER_TURN_DELAY_MS = 2000;
 const SERVER_AI_SLIDE_DELAY_MS = 1000;
+const LOCAL_AI_MAX_DEPTH = 1;
+const LOCAL_AI_THINK_MS = 50;
 
 export const GameScreen = () => {
   const [localState, dispatch] = useReducer(reducer, undefined, () => createInitialState());
@@ -26,6 +29,8 @@ export const GameScreen = () => {
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingApplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeState = mode === 'server' ? serverState : localState;
   const validDestinations = useMemo(
@@ -43,8 +48,34 @@ export const GameScreen = () => {
         clearTimeout(pendingApplyRef.current);
         pendingApplyRef.current = null;
       }
+      if (aiTimeoutRef.current) {
+        clearTimeout(aiTimeoutRef.current);
+        aiTimeoutRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (mode !== 'local') return;
+    if (localState.currentPlayer !== 'B') return;
+    if (localState.winner || localState.drawReason) return;
+    if (isAiThinking) return;
+
+    setIsAiThinking(true);
+    const startedAt = Date.now();
+    const action = computeBestAction(localState, 'B', {
+      maxDepth: LOCAL_AI_MAX_DEPTH,
+      timeLimitMs: LOCAL_AI_THINK_MS,
+    });
+    const elapsed = Date.now() - startedAt;
+    const remaining = Math.max(0, LOCAL_AI_THINK_MS - elapsed);
+
+    aiTimeoutRef.current = setTimeout(() => {
+      if (action) dispatch(action);
+      setIsAiThinking(false);
+      aiTimeoutRef.current = null;
+    }, remaining);
+  }, [mode, localState, isAiThinking]);
 
   useEffect(() => {
     setServerError(null);
@@ -155,6 +186,7 @@ export const GameScreen = () => {
   };
 
   const handlePressSlot = async (squareIndex: number, slotIndex: number) => {
+    if (activeState?.winner || activeState?.drawReason) return;
     const isRepeatMove =
       activeState &&
       (activeState.phase === 'placementSlide' || activeState.phase === 'movement') &&
@@ -168,6 +200,7 @@ export const GameScreen = () => {
     const isLegalSlide = !hasLegalSlides || activeState?.legalSlides?.includes(squareIndex);
 
     if (mode === 'local') {
+      if (localState.currentPlayer === 'B') return;
       if (isRepeatMove) {
         setLocalError('You cannot move the same square twice in a row.');
         return;
@@ -250,7 +283,9 @@ export const GameScreen = () => {
               onPressSlot={handlePressSlot}
               onPressSquare={squareIndex => handlePressSlot(squareIndex, 0)}
               enableSquarePress={
-                activeState.phase === 'placementSlide' || activeState.phase === 'movement'
+                (activeState.phase === 'placementSlide' || activeState.phase === 'movement') &&
+                !activeState.winner &&
+                !activeState.drawReason
               }
             />
           ) : (
