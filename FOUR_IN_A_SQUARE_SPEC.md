@@ -1,95 +1,294 @@
-## Four in a Square (“Arba BaRibua”) — React Native Game Spec
+# Four in a Square (ארבע בריבוע) — Game Spec & API Contract
 
-Build a React Native game called **“Four in a Square”** (Hebrew: **“Arba BaRibua”**) for **2 players**.
+## Overview
 
-### IMPORTANT WORKFLOW NOTE
-This description is a general guide. **Do NOT generate the whole solution in one big bulk.**  
-Work in **small chunks/steps**. Before each chunk, briefly explain what you are going to do next, then output only that chunk.  
-**Wait for my confirmation or next instruction** before continuing to the next chunk.
+**"Four in a Square"** (Hebrew: **"Arba BaRibua"**) — a board game where **a human player (Red)** plays against **an AI server (Blue)**.
+
+---
 
 ## Board
-- **3x3 grid** of big squares (total **9**).
-- Each big square contains a **2x2 mini-grid** (**4 slots**).
-- Each slot can hold **at most one piece**.
-- Two players: **Red (R)** and **Blue (B)**.
 
-## Game start
-- The board starts **EMPTY** (no pieces on the board).
+- **3×3 grid** of squares (total **9 squares**, indexed `0..8`).
+- Each square contains a **2×2 mini-grid** (**4 slots**, indexed `0..3`).
+- Slot layout inside each square:
 
-## Turn-based gameplay
-- Players alternate turns.
-- Each turn has **TWO phases**:
-
-### 1) Placement phase (early game)
-- The player places **ONE** of their pieces into **any empty slot** on the board.
-- Continue placing until all pieces are placed (**choose piece count; default 4 per player unless specified**).
-
-### 2) Movement phase (after placement is finished)
-- The player moves **exactly ONE** of their pieces per turn.
-- A move = **slide** the selected piece to an adjacent slot according to the movement rules:
-  - Movement is only between **neighboring big squares** (up/down/left/right).
-  - The piece moves into an **empty slot** in the adjacent big square (**no diagonal moves**).
-  - No jumping; destination slot must be empty.
-
-## Win condition (UPDATED)
-A player wins if they form a **2x2 solid block** of their color (**RR/RR** or **BB/BB**) inside the **UNION of TWO ADJACENT big squares**.
-
-The winning 2x2 block can be:
-- Fully inside **one** big square (classic 2x2 fill), OR
-- **Straddling** the boundary between two adjacent big squares (horizontal or vertical adjacency).
-
-In other words, consider any pair of adjacent big squares:
-- **Horizontal pair** forms a **2x4** area; a win exists if there is any **2x2** sub-block of the same color inside it.
-- **Vertical pair** forms a **4x2** area; a win exists if there is any **2x2** sub-block of the same color inside it.
-
-### Example win patterns in a 2x4 area (`|` = boundary)
-1)
 ```
-[ R R | . . ]
-[ R R | . . ]
-```
-2)
-```
-[ . . | R R ]
-[ . . | R R ]
-```
-3)
-```
-[ . R | R . ]
-[ . R | R . ]
+ 0 | 1
+---|---
+ 2 | 3
 ```
 
-### Example win patterns in a 4x2 area (vertical adjacency; boundary between row 2 and 3)
-1)
+- Total: **36 slots** on the board.
+- **One square is always empty** (the "hole") — like an 8-puzzle. At the start of the game, the hole is at **squareIndex 4** (center).
+
+### Square index layout (3×3)
+
 ```
-[ R R ]
-[ R R ]
-[ . . ]
-[ . . ]
-```
-2)
-```
-[ . . ]
-[ . . ]
-[ R R ]
-[ R R ]
-```
-3)
-```
-[ . . ]
-[ R R ]
-[ R R ]
-[ . . ]
+ 0 | 1 | 2
+---|---|---
+ 3 | 4 | 5      ← 4 = initial hole (empty square)
+---|---|---
+ 6 | 7 | 8
 ```
 
-Same patterns apply for **Blue** (replace **R** with **B**).
+---
 
-## End condition
-- Define what happens if **no moves are available** (**draw or loss**) and implement consistently.
+## Players
 
-## UI requirements
-- Show the **3x3 board** with tile styling and **red/blue pieces**.
+| Player | Color | Role |
+|--------|-------|------|
+| **R** (Red) | Red pieces | Human (client) |
+| **B** (Blue) | Blue pieces | AI (server) |
+
+---
+
+## Pieces
+
+- Default: **8 pieces per player** (16 total).
+- Configurable per game via `piecesPerPlayer`.
+
+---
+
+## Game Flow
+
+### Turn structure
+
+Players alternate turns. **Red always goes first.**
+
+Each turn consists of **two mandatory actions**:
+
+#### 1) Place a piece
+
+The current player places **one** piece into any **empty slot** on the board.
+- Cannot place into the **hole square** (the empty square).
+
+#### 2) Slide a square
+
+After placing, the current player **must slide one neighboring square into the hole**.
+- Only squares **adjacent to the hole** (up/down/left/right) can slide.
+- The sliding square **swaps** with the hole — all pieces inside the square **move with it**.
+- No diagonal slides.
+
+After both actions, the turn passes to the other player.
+
+### Phases
+
+| Phase | Description |
+|-------|-------------|
+| `placement` | Player must **place** a piece into an empty slot |
+| `placementSlide` | Player just placed a piece; must now **slide** a square |
+| `movement` | All pieces placed; player must only **slide** a square (no placement) |
+
+- **Placement** continues until both players have placed all their pieces.
+- After all pieces are placed → phase becomes **`movement`**.
+- In **movement**, each turn is **only a slide** (no piece placement).
+
+---
+
+## Win Condition
+
+A player wins immediately if they form a **2×2 solid block** of their color **anywhere** on the overall **6×6 mini-grid**.
+
+This includes:
+- Fully inside **one** square (all 4 slots same color).
+- **Straddling** the boundary of **two adjacent** squares (horizontal or vertical).
+- **Spanning the intersection** of **four** squares (corners touching).
+
+The check is performed on the global 6×6 grid (3 squares × 2 slots = 6 in each dimension). Any 2×2 sub-block of the same color at any position `(row, col)` where `0 ≤ row ≤ 4` and `0 ≤ col ≤ 4` triggers a win.
+
+### Global coordinate mapping
+
+```
+globalRow = squareRow * 2 + miniRow      (0..5)
+globalCol = squareCol * 2 + miniCol      (0..5)
+
+squareRow = floor(squareIndex / 3)
+squareCol = squareIndex % 3
+miniRow   = floor(slotIndex / 2)
+miniCol   = slotIndex % 2
+```
+
+---
+
+## Draw / No-moves
+
+- In **movement** phase, if the current player has **zero legal slides** (no neighbor of the hole exists — should not happen on a 3×3 grid), the game ends as **draw**.
+
+---
+
+## Data Model (field names — must match between client & server)
+
+### GameState
+
+```json
+{
+  "board": [[null, "R", null, null], ...],   // 9 arrays of 4 slots each
+  "phase": "placement",                       // "placement" | "placementSlide" | "movement"
+  "currentPlayer": "R",                       // "R" | "B"
+  "placed": { "R": 0, "B": 0 },             // pieces placed so far
+  "piecesPerPlayer": 8,
+  "holeSquareIndex": 4,                       // which square is the hole (0..8)
+  "selectedSquareIndex": null,                // client-only (not needed in API)
+  "winner": null,                             // null | "R" | "B"
+  "drawReason": null                          // null | string
+}
+```
+
+### SlotValue
+
+`null` (empty), `"R"` (red piece), or `"B"` (blue piece).
+
+### Board
+
+Array of **9 elements** (one per square). Each element is an array of **4 SlotValues** (one per slot).
+
+```
+board[squareIndex][slotIndex] → SlotValue
+```
+
+---
+
+## REST API
+
+### Base URL
+
+```
+http://127.0.0.1:8000
+```
+
+### Endpoints
+
+#### `POST /games` — Create a new game
+
+**Request body:**
+```json
+{
+  "piecesPerPlayer": 8
+}
+```
+
+**Response:**
+```json
+{
+  "gameId": "abc123",
+  "playerToken": "tok_xxx",
+  "state": { /* GameState */ }
+}
+```
+
+- Human plays as **Red (`"R"`)**.
+- Server / AI plays as **Blue (`"B"`)**.
+- `playerToken` authenticates the human player for subsequent requests.
+
+---
+
+#### `GET /games/{gameId}` — Get current game state
+
+**Response:**
+```json
+{
+  "state": { /* GameState */ }
+}
+```
+
+---
+
+#### `POST /games/{gameId}/move` — Submit a move
+
+The human sends their action. The server:
+1. Validates and applies the human's action.
+2. Checks for win/draw.
+3. If the game is not over and it's AI's turn, the AI makes its move(s).
+4. Checks for win/draw again.
+5. Returns the updated state (after both human and AI moves).
+
+**Request body (placement phase — place a piece):**
+```json
+{
+  "action": "place",
+  "squareIndex": 0,
+  "slotIndex": 2,
+  "playerToken": "tok_xxx"
+}
+```
+
+**Request body (placementSlide phase — slide a square):**
+```json
+{
+  "action": "slide",
+  "squareIndex": 3,
+  "playerToken": "tok_xxx"
+}
+```
+
+**Request body (movement phase — slide only):**
+```json
+{
+  "action": "slide",
+  "squareIndex": 1,
+  "playerToken": "tok_xxx"
+}
+```
+
+**Response (success):**
+```json
+{
+  "state": { /* GameState — after human move + AI move */ }
+}
+```
+
+**Response (error):**
+```json
+{
+  "error": "Invalid move: slot is occupied"
+}
+```
+
+**Note:** `squareIndex` in a `slide` action refers to the square being slid **into the hole** (must be adjacent to `holeSquareIndex`).
+
+---
+
+#### `POST /games/{gameId}/restart` — Restart the game
+
+**Response:**
+```json
+{
+  "state": { /* fresh GameState */ }
+}
+```
+
+---
+
+## Client → Server Flow (typical turn)
+
+### During placement:
+
+```
+1. Human taps a slot
+   → POST /games/{id}/move  { action: "place", squareIndex, slotIndex }
+   ← Server validates, applies placement
+
+2. Human taps a highlighted square to slide
+   → POST /games/{id}/move  { action: "slide", squareIndex }
+   ← Server validates, applies slide, then AI does its turn (place + slide)
+   ← Returns state after both players' turns
+```
+
+### During movement:
+
+```
+1. Human taps a highlighted square to slide
+   → POST /games/{id}/move  { action: "slide", squareIndex }
+   ← Server validates, applies slide, then AI does its slide
+   ← Returns state after both players' turns
+```
+
+---
+
+## UI Requirements (client-side)
+
+- Show the **3×3 board** with square tiles and **red/blue pieces**.
+- The **hole square** is rendered with a dashed border (transparent background).
 - During placement: **tap an empty slot** to place a piece.
-- During movement: **tap a piece to select it**; **highlight valid destination slots**; tap destination to move.
-- Show **current player** turn indicator (Red / Blue), **current phase** (Placement / Movement), and a **Restart** button.
-
+- During placementSlide / movement: **squares adjacent to the hole** are highlighted with a **green dashed border**. Tap a highlighted square to slide it into the hole (one tap).
+- Show **current player** turn indicator, **current phase**, piece counts, and a **Restart** button.
