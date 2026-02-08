@@ -13,6 +13,11 @@ type MoveResponse = Readonly<{
   error?: string;
 }>;
 
+const normalizeState = (state: GameState): GameState => ({
+  ...state,
+  lastMovedSquareIndex: state.lastMovedSquareIndex ?? null,
+});
+
 const requestJson = async <T>(url: string, options: RequestInit): Promise<T> => {
   const res = await fetch(url, options);
   const data = (await res.json()) as T;
@@ -28,7 +33,7 @@ export const createGame = async (): Promise<CreateGameResponse> =>
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ piecesPerPlayer: DEFAULT_PIECES_PER_PLAYER }),
-  });
+  }).then(res => ({ ...res, state: normalizeState(res.state) }));
 
 export const restartGame = async (gameId: string, playerToken: string): Promise<GameState> => {
   const res = await requestJson<{ state: GameState }>(`${BASE_URL}/games/${gameId}/restart`, {
@@ -36,7 +41,7 @@ export const restartGame = async (gameId: string, playerToken: string): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ playerToken }),
   });
-  return res.state;
+  return normalizeState(res.state);
 };
 
 export const placePiece = async (
@@ -50,7 +55,7 @@ export const placePiece = async (
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action: 'place', squareIndex, slotIndex, playerToken }),
   });
-  return res.state;
+  return normalizeState(res.state);
 };
 
 export const slideSquare = async (
@@ -69,5 +74,5 @@ export const slideSquare = async (
       playerToken,
     }),
   });
-  return res.state;
+  return normalizeState(res.state);
 };

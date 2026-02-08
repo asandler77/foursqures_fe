@@ -7,7 +7,7 @@ import {
 } from './rules';
 import { getNeighborSquareIndices } from './mapping';
 
-export const DEFAULT_PIECES_PER_PLAYER = 8;
+export const DEFAULT_PIECES_PER_PLAYER = 16;
 
 export const createInitialState = (
   piecesPerPlayer: number = DEFAULT_PIECES_PER_PLAYER,
@@ -19,6 +19,7 @@ export const createInitialState = (
   placed: { R: 0, B: 0 },
   holeSquareIndex: HOLE_SQUARE_INDEX,
   selectedSquareIndex: null,
+  lastMovedSquareIndex: null,
   winner: null,
   drawReason: null,
 });
@@ -42,7 +43,9 @@ export const getValidDestinationsForSelected = (state: GameState): Pos[] => {
   // During sliding steps (placementSlide and movement):
   // Highlight all movable big squares (adjacent to hole).
   if (state.phase === 'placementSlide' || state.phase === 'movement') {
-    return getMovableSquareIndices(state.holeSquareIndex).flatMap(allSlotsInSquare);
+    return getMovableSquareIndices(state.holeSquareIndex)
+      .filter(squareIndex => squareIndex !== state.lastMovedSquareIndex)
+      .flatMap(allSlotsInSquare);
   }
 
   return [];
@@ -72,6 +75,7 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
         nextBoard[fromSquareIndex] = temp;
 
         const nextHoleSquareIndex = fromSquareIndex;
+        const nextLastMovedSquareIndex = toSquareIndex;
 
         const w = checkWinner(nextBoard);
         if (w) {
@@ -80,6 +84,7 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
             board: nextBoard,
             holeSquareIndex: nextHoleSquareIndex,
             selectedSquareIndex: null,
+            lastMovedSquareIndex: nextLastMovedSquareIndex,
             winner: w,
           };
         }
@@ -102,6 +107,7 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
           board: nextBoard,
           holeSquareIndex: nextHoleSquareIndex,
           selectedSquareIndex: null,
+          lastMovedSquareIndex: nextLastMovedSquareIndex,
           currentPlayer: nextPlayer,
           phase: nextPhase,
         };
@@ -150,7 +156,11 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
         const movable = new Set(getMovableSquareIndices(state.holeSquareIndex));
 
         // One-tap slide: tap any movable big square to immediately slide it into the hole.
-        if (squareIndex !== state.holeSquareIndex && movable.has(squareIndex)) {
+        if (
+          squareIndex !== state.holeSquareIndex &&
+          squareIndex !== state.lastMovedSquareIndex &&
+          movable.has(squareIndex)
+        ) {
           return slideSquareIntoHole(state, squareIndex);
         }
 

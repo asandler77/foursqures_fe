@@ -17,6 +17,7 @@ export type GameState = Readonly<{
   placed: PlacedCount;
   holeSquareIndex: number;
   selectedSquareIndex: number | null;
+  lastMovedSquareIndex: number | null;
   winner: Player | null;
   drawReason: string | null;
 }>;

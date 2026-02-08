@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { Board, Pos } from '../../game/types';
 import { colors } from '../theme';
 import { Slot } from './Slot';
@@ -14,6 +14,8 @@ type Props = Readonly<{
   selectedSquareIndex: number | null;
   validDestinations: ReadonlyArray<Pos>;
   onPressSlot: (squareIndex: number, slotIndex: number) => void;
+  onPressSquare?: (squareIndex: number) => void;
+  enableSquarePress?: boolean;
 }>;
 
 const keyOf = (p: Pos) => `${p.squareIndex}:${p.slotIndex}`;
@@ -24,6 +26,8 @@ export const BoardView = ({
   selectedSquareIndex,
   validDestinations,
   onPressSlot,
+  onPressSquare,
+  enableSquarePress = false,
 }: Props) => {
   const { width: windowWidth } = useWindowDimensions();
   const validSet = useMemo(() => new Set(validDestinations.map(keyOf)), [validDestinations]);
@@ -158,6 +162,13 @@ export const BoardView = ({
                       <View style={styles.miniRow}>{bottomRowSlots.map(renderSlot)}</View>
                     </View>
                   </View>
+                  {enableSquarePress && onPressSquare ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => onPressSquare(squareIndex)}
+                      style={styles.squarePressOverlay}
+                    />
+                  ) : null}
                 </Animated.View>
               );
             })}
@@ -230,6 +241,10 @@ const styles = StyleSheet.create({
   miniRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  squarePressOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
   },
 });
 

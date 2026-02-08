@@ -25,6 +25,7 @@ export const GameScreen = () => {
   const [turnCooldown, setTurnCooldown] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingApplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const activeState = mode === 'server' ? serverState : localState;
   const validDestinations = useMemo(
@@ -46,6 +47,8 @@ export const GameScreen = () => {
   }, []);
 
   useEffect(() => {
+    setServerError(null);
+    setLocalError(null);
     if (mode !== 'server') return;
     if (serverState && serverInfo) return;
 
@@ -124,6 +127,7 @@ export const GameScreen = () => {
 
   const handleRestart = async () => {
     if (mode === 'local') {
+      setLocalError(null);
       dispatch({ type: 'restart' });
       return;
     }
@@ -137,6 +141,7 @@ export const GameScreen = () => {
       pendingApplyRef.current = null;
     }
     setTurnCooldown(false);
+    setLocalError(null);
     setIsLoading(true);
     setServerError(null);
     try {
@@ -150,32 +155,55 @@ export const GameScreen = () => {
   };
 
   const handlePressSlot = async (squareIndex: number, slotIndex: number) => {
+    const isRepeatMove =
+      activeState &&
+      (activeState.phase === 'placementSlide' || activeState.phase === 'movement') &&
+      activeState.lastMovedSquareIndex !== null &&
+      squareIndex === activeState.lastMovedSquareIndex;
+
     if (mode === 'local') {
+      if (isRepeatMove) {
+        setLocalError('You cannot move the same square twice in a row.');
+        return;
+      }
+      setLocalError(null);
       dispatch({ type: 'pressSlot', squareIndex, slotIndex });
       return;
     }
     if (!serverInfo || !serverState || isLoading || turnCooldown) return;
+    if (isRepeatMove) {
+      setServerError('You cannot move the same square twice in a row.');
+      return;
+    }
 
     setIsLoading(true);
     setServerError(null);
+    setLocalError(null);
     let prevState: GameState | null = null;
     try {
       prevState = serverState;
       const optimistic = reducer(serverState, { type: 'pressSlot', squareIndex, slotIndex });
       setServerState(optimistic);
-      const startedAt = Date.now();
-      startTurnCooldown();
 
-      const next =
-        serverState.phase === 'placement'
-          ? await placePiece(serverInfo.gameId, serverInfo.playerToken, squareIndex, slotIndex)
-          : await slideSquare(
-              serverInfo.gameId,
-              serverInfo.playerToken,
-              squareIndex,
-              serverState.holeSquareIndex,
-            );
-      applyServerStateWithDelay(next, optimistic, startedAt);
+      if (serverState.phase === 'placement') {
+        const next = await placePiece(
+          serverInfo.gameId,
+          serverInfo.playerToken,
+          squareIndex,
+          slotIndex,
+        );
+        setServerState(next);
+      } else {
+        const startedAt = Date.now();
+        startTurnCooldown();
+        const next = await slideSquare(
+          serverInfo.gameId,
+          serverInfo.playerToken,
+          squareIndex,
+          serverState.holeSquareIndex,
+        );
+        applyServerStateWithDelay(next, optimistic, startedAt);
+      }
     } catch (err) {
       if (prevState) setServerState(prevState);
       if (cooldownRef.current) {
@@ -206,6 +234,10 @@ export const GameScreen = () => {
               selectedSquareIndex={activeState.selectedSquareIndex}
               validDestinations={validDestinations}
               onPressSlot={handlePressSlot}
+              onPressSquare={squareIndex => handlePressSlot(squareIndex, 0)}
+              enableSquarePress={
+                activeState.phase === 'placementSlide' || activeState.phase === 'movement'
+              }
             />
           ) : (
             <Text style={styles.loadingText}>
@@ -241,6 +273,8 @@ export const GameScreen = () => {
         </View>
         {mode === 'server' && serverError ? (
           <Text style={styles.errorText}>{serverError}</Text>
+        ) : mode === 'local' && localError ? (
+          <Text style={styles.errorText}>{localError}</Text>
         ) : null}
       </View>
     </SafeAreaView>
