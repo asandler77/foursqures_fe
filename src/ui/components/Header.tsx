@@ -74,18 +74,15 @@ export const Header = ({ state, onRestart }: Props) => {
       </Text>
 
       {state.drawReason ? <Text style={styles.notice}>{state.drawReason}</Text> : null}
-      {state.winner || state.drawReason ? null : state.phase === 'placement' ? (
-        <Text style={styles.notice}>Place a piece in any slot (not in the empty square).</Text>
-      ) : state.phase === 'placementSlide' ? (
-        <Text style={styles.notice}>
-          Now slide: tap a highlighted square next to the empty space to move it into the empty
-          space.
-        </Text>
-      ) : (
-        <Text style={styles.notice}>
-          Slide a square into the empty space: tap a highlighted neighboring square.
-        </Text>
-      )}
+      <Text style={styles.notice} numberOfLines={2}>
+        {state.winner || state.drawReason
+          ? ' '
+          : state.phase === 'placement'
+            ? 'Place a piece in any slot (not in the empty square).'
+            : state.phase === 'placementSlide'
+              ? 'Now slide: tap a highlighted square to move it into the empty space.'
+              : 'Slide a square into the empty space: tap a highlighted neighboring square.'}
+      </Text>
     </View>
   );
 };
@@ -98,22 +95,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
 
-  title: { fontSize: 18, fontWeight: '700', color: colors.text },
-  meta: { fontSize: 13, color: '#374151' },
-  metaSmall: { fontSize: 12, color: '#374151' },
+  title: { fontSize: 25, fontWeight: '700', color: colors.text },
+  meta: { fontSize: 20, color: '#374151' },
+  metaSmall: { fontSize: 18, color: '#374151' },
   metaStrong: { fontWeight: '700', color: colors.text },
   redText: { color: colors.red },
   blueText: { color: colors.blue },
-  notice: { marginTop: 2, fontSize: 12, color: colors.textMuted },
+  notice: { marginTop: 3, fontSize: 17, lineHeight: 21, minHeight: 42, color: colors.textMuted },
 
   restartButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
     backgroundColor: colors.black,
   },
   restartButtonPressed: { opacity: 0.85 },
-  restartButtonText: { color: 'white', fontWeight: '700' },
+  restartButtonText: { color: 'white', fontWeight: '700', fontSize: 20 },
 
   turnTabs: {
     flexDirection: 'row',
@@ -134,11 +131,11 @@ const styles = StyleSheet.create({
   },
   tabActiveP1: { backgroundColor: colors.tabRed },
   tabActiveP2: { backgroundColor: colors.tabBlue },
-  tabText: { fontSize: 13, fontWeight: '700', color: '#1F2937' },
+  tabText: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
   tabTextActive: { color: 'white' },
   dot: {
-    width: 10,
-    height: 10,
+    width: 12,
+    height: 12,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.75)',

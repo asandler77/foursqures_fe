@@ -1,20 +1,20 @@
-export const bigIndexFromBigRowCol = (bigRow: number, bigCol: number): number =>
-  bigRow * 3 + bigCol;
+export const squareIndexFromRowCol = (squareRow: number, squareCol: number): number =>
+  squareRow * 3 + squareCol;
 
-export const bigIndexToBigRowCol = (
-  bigIndex: number,
-): { bigRow: number; bigCol: number } => ({
-  bigRow: Math.floor(bigIndex / 3),
-  bigCol: bigIndex % 3,
+export const squareIndexToRowCol = (
+  squareIndex: number,
+): { squareRow: number; squareCol: number } => ({
+  squareRow: Math.floor(squareIndex / 3),
+  squareCol: squareIndex % 3,
 });
 
-export const getNeighborBigIndices = (bigIndex: number): number[] => {
-  const { bigRow, bigCol } = bigIndexToBigRowCol(bigIndex);
+export const getNeighborSquareIndices = (squareIndex: number): number[] => {
+  const { squareRow, squareCol } = squareIndexToRowCol(squareIndex);
   const neighbors: number[] = [];
-  if (bigRow > 0) neighbors.push(bigIndexFromBigRowCol(bigRow - 1, bigCol));
-  if (bigRow < 2) neighbors.push(bigIndexFromBigRowCol(bigRow + 1, bigCol));
-  if (bigCol > 0) neighbors.push(bigIndexFromBigRowCol(bigRow, bigCol - 1));
-  if (bigCol < 2) neighbors.push(bigIndexFromBigRowCol(bigRow, bigCol + 1));
+  if (squareRow > 0) neighbors.push(squareIndexFromRowCol(squareRow - 1, squareCol));
+  if (squareRow < 2) neighbors.push(squareIndexFromRowCol(squareRow + 1, squareCol));
+  if (squareCol > 0) neighbors.push(squareIndexFromRowCol(squareRow, squareCol - 1));
+  if (squareCol < 2) neighbors.push(squareIndexFromRowCol(squareRow, squareCol + 1));
   return neighbors;
 };
 

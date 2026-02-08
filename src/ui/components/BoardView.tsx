@@ -1,26 +1,27 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { Board, Pos } from '../../game/types';
 import { colors } from '../theme';
 import { Slot } from './Slot';
 
 const INNER_TILE_PADDING = 6;
+const SLIDE_DURATION_MS = 500;
 
 type Props = Readonly<{
   board: Board;
-  holeBigIndex: number;
-  selectedBigIndex: number | null;
+  holeSquareIndex: number;
+  selectedSquareIndex: number | null;
   validDestinations: ReadonlyArray<Pos>;
-  onPressSlot: (bigIndex: number, slotIndex: number) => void;
+  onPressSlot: (squareIndex: number, slotIndex: number) => void;
 }>;
 
-const keyOf = (p: Pos) => `${p.bigIndex}:${p.slotIndex}`;
+const keyOf = (p: Pos) => `${p.squareIndex}:${p.slotIndex}`;
 
 export const BoardView = ({
   board,
-  holeBigIndex,
-  selectedBigIndex,
+  holeSquareIndex,
+  selectedSquareIndex,
   validDestinations,
   onPressSlot,
 }: Props) => {
@@ -40,6 +41,42 @@ export const BoardView = ({
   const innerContentSize = innerSize - INNER_TILE_PADDING * 2;
   const slotSize = (innerContentSize - innerGap) / 2;
 
+  const prevHoleRef = useRef<number>(holeSquareIndex);
+  const animMapRef = useRef<Map<number, Animated.ValueXY>>(new Map());
+
+  const getAnimForSquare = (squareIndex: number) => {
+    const map = animMapRef.current;
+    const existing = map.get(squareIndex);
+    if (existing) return existing;
+    const created = new Animated.ValueXY({ x: 0, y: 0 });
+    map.set(squareIndex, created);
+    return created;
+  };
+
+  useEffect(() => {
+    const prevHole = prevHoleRef.current;
+    if (prevHole === holeSquareIndex) return;
+
+    const fromIndex = holeSquareIndex;
+    const toIndex = prevHole;
+    const fromRow = Math.floor(fromIndex / 3);
+    const fromCol = fromIndex % 3;
+    const toRow = Math.floor(toIndex / 3);
+    const toCol = toIndex % 3;
+    const dx = (fromCol - toCol) * (bigCellSize + bigGap);
+    const dy = (fromRow - toRow) * (bigCellSize + bigGap);
+
+    const anim = getAnimForSquare(toIndex);
+    anim.setValue({ x: dx, y: dy });
+    Animated.timing(anim, {
+      toValue: { x: 0, y: 0 },
+      duration: SLIDE_DURATION_MS,
+      useNativeDriver: true,
+    }).start();
+
+    prevHoleRef.current = holeSquareIndex;
+  }, [holeSquareIndex, bigCellSize, bigGap]);
+
   return (
     <View style={[styles.board, { width: boardSize, height: boardSize }]}>
       {[0, 1, 2].map(row => {
@@ -55,16 +92,17 @@ export const BoardView = ({
                 marginBottom: row === 2 ? 0 : bigGap,
               },
             ]}>
-            {rowIndices.map(bigIndex => {
-              const isHole = bigIndex === holeBigIndex;
+            {rowIndices.map(squareIndex => {
+              const isHole = squareIndex === holeSquareIndex;
               const isBigHighlighted =
-                validSet.has(`${bigIndex}:0`) ||
-                validSet.has(`${bigIndex}:1`) ||
-                validSet.has(`${bigIndex}:2`) ||
-                validSet.has(`${bigIndex}:3`);
-              const isBigSelected = selectedBigIndex === bigIndex;
+                validSet.has(`${squareIndex}:0`) ||
+                validSet.has(`${squareIndex}:1`) ||
+                validSet.has(`${squareIndex}:2`) ||
+                validSet.has(`${squareIndex}:3`);
+              const isBigSelected = selectedSquareIndex === squareIndex;
 
-              const cell = board[bigIndex] ?? [null, null, null, null];
+              const cell = board[squareIndex] ?? [null, null, null, null];
+              const anim = getAnimForSquare(squareIndex);
 
               const bigCellStyle: StyleProp<ViewStyle> = [
                 styles.bigCell,
@@ -84,7 +122,7 @@ export const BoardView = ({
               const renderSlot = (slotIndex: 0 | 1 | 2 | 3) => {
                 const value = cell[slotIndex] ?? null;
                 const isSelected = isBigSelected;
-                // We highlight only the BIG square (2x2), not individual slots.
+                // We highlight only the square (2x2), not individual slots.
                 const isValidDestination = false;
 
                 return (
@@ -93,20 +131,24 @@ export const BoardView = ({
                     value={value}
                     isSelected={isSelected}
                     isValidDestination={isValidDestination}
-                    onPress={() => onPressSlot(bigIndex, slotIndex)}
-                    accessibilityLabel={`Big cell ${bigIndex + 1}, slot ${slotIndex + 1}`}
+                    onPress={() => onPressSlot(squareIndex, slotIndex)}
+                    accessibilityLabel={`Square ${squareIndex + 1}, slot ${slotIndex + 1}`}
                     containerStyle={{ width: slotSize, height: slotSize }}
                   />
                 );
               };
 
               return (
-                <View key={bigIndex} style={bigCellStyle}>
+                <Animated.View
+                  key={squareIndex}
+                  style={[
+                    bigCellStyle,
+                    { transform: [{ translateX: anim.x }, { translateY: anim.y }] },
+                  ]}>
                   <View
                     style={[
                       styles.innerTile,
                       isHole && styles.holeInnerTile,
-                      isBigHighlighted && styles.innerTileHighlighted,
                       isBigSelected && styles.innerTileSelected,
                     ]}>
                     <View style={styles.miniGrid}>
@@ -116,7 +158,7 @@ export const BoardView = ({
                       <View style={styles.miniRow}>{bottomRowSlots.map(renderSlot)}</View>
                     </View>
                   </View>
-                </View>
+                </Animated.View>
               );
             })}
           </View>
@@ -155,6 +197,7 @@ const styles = StyleSheet.create({
   bigCellHighlighted: {
     borderColor: colors.validBorder,
     borderWidth: 3,
+    borderStyle: 'dashed',
   },
   bigCellSelected: {
     borderColor: 'rgba(255,255,255,0.85)',
@@ -176,10 +219,6 @@ const styles = StyleSheet.create({
   holeInnerTile: {
     backgroundColor: 'rgba(72, 98, 161, 0.25)',
     borderColor: 'rgba(61, 86, 142, 0.35)',
-  },
-  innerTileHighlighted: {
-    borderColor: colors.validBorder,
-    backgroundColor: 'rgba(16,185,129,0.18)',
   },
   innerTileSelected: {
     borderColor: 'rgba(255,255,255,0.65)',

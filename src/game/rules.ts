@@ -1,7 +1,7 @@
-import { bigIndexFromBigRowCol, bigIndexToBigRowCol } from './mapping';
+import { squareIndexFromRowCol, squareIndexToRowCol } from './mapping';
 import type { Board, Player, Pos, SlotValue } from './types';
 
-export const HOLE_BIG_INDEX = 4; // center "empty part"
+export const HOLE_SQUARE_INDEX = 4; // center "empty part"
 
 export const createEmptyBoard = (): Board =>
   Array.from({ length: 9 }, () => [null, null, null, null]);
@@ -15,9 +15,9 @@ const getMiniFromBig = (
   miniRow: 0 | 1,
   miniCol: 0 | 1,
 ): SlotValue => {
-  const bigIndex = bigIndexFromBigRowCol(bigRow, bigCol);
+    const squareIndex = squareIndexFromRowCol(bigRow, bigCol);
   const slotIndex = miniRow * 2 + miniCol;
-  return board[bigIndex]?.[slotIndex] ?? null;
+    return board[squareIndex]?.[slotIndex] ?? null;
 };
 
 export const checkWinner = (board: Board): Player | null => {
@@ -88,36 +88,41 @@ const miniToSlotIndex = (miniRow: 0 | 1, miniCol: 0 | 1) => miniRow * 2 + miniCo
 export const getValidDestinations = (board: Board, from: Pos): Pos[] => {
   const destinations: Pos[] = [];
 
-  const { bigRow, bigCol } = bigIndexToBigRowCol(from.bigIndex);
+  const { squareRow, squareCol } = squareIndexToRowCol(from.squareIndex);
   const { miniRow, miniCol } = slotIndexToMini(from.slotIndex);
 
-  const tryAdd = (toBigRow: number, toBigCol: number, toMiniRow: 0 | 1, toMiniCol: 0 | 1) => {
-    if (toBigRow < 0 || toBigRow > 2 || toBigCol < 0 || toBigCol > 2) return;
-    const toBigIndex = bigIndexFromBigRowCol(toBigRow, toBigCol);
+  const tryAdd = (
+    toSquareRow: number,
+    toSquareCol: number,
+    toMiniRow: 0 | 1,
+    toMiniCol: 0 | 1,
+  ) => {
+    if (toSquareRow < 0 || toSquareRow > 2 || toSquareCol < 0 || toSquareCol > 2) return;
+    const toSquareIndex = squareIndexFromRowCol(toSquareRow, toSquareCol);
     const toSlotIndex = miniToSlotIndex(toMiniRow, toMiniCol);
-    if (board[toBigIndex]?.[toSlotIndex] === null) {
-      destinations.push({ bigIndex: toBigIndex, slotIndex: toSlotIndex });
+    if (board[toSquareIndex]?.[toSlotIndex] === null) {
+      destinations.push({ squareIndex: toSquareIndex, slotIndex: toSlotIndex });
     }
   };
 
   // Cross-boundary adjacency (aligned mini-slot across the edge)
   // Right across boundary
-  if (miniCol === 1) tryAdd(bigRow, bigCol + 1, miniRow, 0);
+  if (miniCol === 1) tryAdd(squareRow, squareCol + 1, miniRow, 0);
   // Left across boundary
-  if (miniCol === 0) tryAdd(bigRow, bigCol - 1, miniRow, 1);
+  if (miniCol === 0) tryAdd(squareRow, squareCol - 1, miniRow, 1);
   // Down across boundary
-  if (miniRow === 1) tryAdd(bigRow + 1, bigCol, 0, miniCol);
+  if (miniRow === 1) tryAdd(squareRow + 1, squareCol, 0, miniCol);
   // Up across boundary
-  if (miniRow === 0) tryAdd(bigRow - 1, bigCol, 1, miniCol);
+  if (miniRow === 0) tryAdd(squareRow - 1, squareCol, 1, miniCol);
 
   return destinations;
 };
 
 export const playerHasAnyMove = (board: Board, player: Player): boolean => {
-  for (let bigIndex = 0; bigIndex < 9; bigIndex++) {
+  for (let squareIndex = 0; squareIndex < 9; squareIndex++) {
     for (let slotIndex = 0; slotIndex < 4; slotIndex++) {
-      if (board[bigIndex]?.[slotIndex] !== player) continue;
-      if (getValidDestinations(board, { bigIndex, slotIndex }).length > 0) return true;
+      if (board[squareIndex]?.[slotIndex] !== player) continue;
+      if (getValidDestinations(board, { squareIndex, slotIndex }).length > 0) return true;
     }
   }
   return false;

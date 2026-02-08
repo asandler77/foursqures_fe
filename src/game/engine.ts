@@ -3,11 +3,11 @@ import {
   checkWinner,
   createEmptyBoard,
   otherPlayer,
-  HOLE_BIG_INDEX,
+  HOLE_SQUARE_INDEX,
 } from './rules';
-import { getNeighborBigIndices } from './mapping';
+import { getNeighborSquareIndices } from './mapping';
 
-export const DEFAULT_PIECES_PER_PLAYER = 4;
+export const DEFAULT_PIECES_PER_PLAYER = 8;
 
 export const createInitialState = (
   piecesPerPlayer: number = DEFAULT_PIECES_PER_PLAYER,
@@ -17,8 +17,8 @@ export const createInitialState = (
   phase: 'placement',
   currentPlayer: 'R',
   placed: { R: 0, B: 0 },
-  holeBigIndex: HOLE_BIG_INDEX,
-  selectedBigIndex: null,
+  holeSquareIndex: HOLE_SQUARE_INDEX,
+  selectedSquareIndex: null,
   winner: null,
   drawReason: null,
 });
@@ -26,15 +26,15 @@ export const createInitialState = (
 export const getRemainingPieces = (state: GameState, player: Player): number =>
   state.piecesPerPlayer - state.placed[player];
 
-const allSlotsInBig = (bigIndex: number): Pos[] => [
-  { bigIndex, slotIndex: 0 },
-  { bigIndex, slotIndex: 1 },
-  { bigIndex, slotIndex: 2 },
-  { bigIndex, slotIndex: 3 },
+const allSlotsInSquare = (squareIndex: number): Pos[] => [
+  { squareIndex, slotIndex: 0 },
+  { squareIndex, slotIndex: 1 },
+  { squareIndex, slotIndex: 2 },
+  { squareIndex, slotIndex: 3 },
 ];
 
-const getMovableBigIndices = (holeBigIndex: number): number[] =>
-  getNeighborBigIndices(holeBigIndex);
+const getMovableSquareIndices = (holeSquareIndex: number): number[] =>
+  getNeighborSquareIndices(holeSquareIndex);
 
 export const getValidDestinationsForSelected = (state: GameState): Pos[] => {
   if (state.winner || state.drawReason) return [];
@@ -42,7 +42,7 @@ export const getValidDestinationsForSelected = (state: GameState): Pos[] => {
   // During sliding steps (placementSlide and movement):
   // Highlight all movable big squares (adjacent to hole).
   if (state.phase === 'placementSlide' || state.phase === 'movement') {
-    return getMovableBigIndices(state.holeBigIndex).flatMap(allSlotsInBig);
+    return getMovableSquareIndices(state.holeSquareIndex).flatMap(allSlotsInSquare);
   }
 
   return [];
@@ -56,30 +56,30 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
     case 'pressSlot': {
       if (state.winner || state.drawReason) return state;
 
-      const { bigIndex, slotIndex } = action;
+      const { squareIndex, slotIndex } = action;
 
       const totalPieces = state.piecesPerPlayer * 2;
 
       const slideSelectedIntoHole = (s: GameState): GameState => {
-        if (s.selectedBigIndex === null) return s;
+        if (s.selectedSquareIndex === null) return s;
 
-        const fromBigIndex = s.selectedBigIndex;
-        const toBigIndex = s.holeBigIndex;
+        const fromSquareIndex = s.selectedSquareIndex;
+        const toSquareIndex = s.holeSquareIndex;
 
         const nextBoard = s.board.map(cell => cell.slice());
-        const temp = nextBoard[toBigIndex];
-        nextBoard[toBigIndex] = nextBoard[fromBigIndex];
-        nextBoard[fromBigIndex] = temp;
+        const temp = nextBoard[toSquareIndex];
+        nextBoard[toSquareIndex] = nextBoard[fromSquareIndex];
+        nextBoard[fromSquareIndex] = temp;
 
-        const nextHoleBigIndex = fromBigIndex;
+        const nextHoleSquareIndex = fromSquareIndex;
 
         const w = checkWinner(nextBoard);
         if (w) {
           return {
             ...s,
             board: nextBoard,
-            holeBigIndex: nextHoleBigIndex,
-            selectedBigIndex: null,
+            holeSquareIndex: nextHoleSquareIndex,
+            selectedSquareIndex: null,
             winner: w,
           };
         }
@@ -100,24 +100,24 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
         return {
           ...s,
           board: nextBoard,
-          holeBigIndex: nextHoleBigIndex,
-          selectedBigIndex: null,
+          holeSquareIndex: nextHoleSquareIndex,
+          selectedSquareIndex: null,
           currentPlayer: nextPlayer,
           phase: nextPhase,
         };
       };
 
-      const slideBigIntoHole = (s: GameState, fromBigIndex: number): GameState =>
-        slideSelectedIntoHole({ ...s, selectedBigIndex: fromBigIndex });
+      const slideSquareIntoHole = (s: GameState, fromSquareIndex: number): GameState =>
+        slideSelectedIntoHole({ ...s, selectedSquareIndex: fromSquareIndex });
 
       // Placement: place one piece (not in the current hole), then MUST slide a big square.
       if (state.phase === 'placement') {
-        if (bigIndex === state.holeBigIndex) return state;
+        if (squareIndex === state.holeSquareIndex) return state;
         if (state.placed[state.currentPlayer] >= state.piecesPerPlayer) return state;
-        if (state.board[bigIndex]?.[slotIndex] !== null) return state;
+        if (state.board[squareIndex]?.[slotIndex] !== null) return state;
 
         const nextBoard = state.board.map(cell => cell.slice());
-        nextBoard[bigIndex][slotIndex] = state.currentPlayer;
+        nextBoard[squareIndex][slotIndex] = state.currentPlayer;
 
         const nextPlaced = {
           ...state.placed,
@@ -130,7 +130,7 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
             ...state,
             board: nextBoard,
             placed: nextPlaced,
-            selectedBigIndex: null,
+            selectedSquareIndex: null,
             winner: w,
           };
         }
@@ -141,17 +141,17 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
           board: nextBoard,
           placed: nextPlaced,
           phase: 'placementSlide',
-          selectedBigIndex: null,
+          selectedSquareIndex: null,
         };
       }
 
       // PlacementSlide / Movement: slide a whole BIG square into the hole.
       if (state.phase === 'placementSlide' || state.phase === 'movement') {
-        const movable = new Set(getMovableBigIndices(state.holeBigIndex));
+        const movable = new Set(getMovableSquareIndices(state.holeSquareIndex));
 
         // One-tap slide: tap any movable big square to immediately slide it into the hole.
-        if (bigIndex !== state.holeBigIndex && movable.has(bigIndex)) {
-          return slideBigIntoHole(state, bigIndex);
+        if (squareIndex !== state.holeSquareIndex && movable.has(squareIndex)) {
+          return slideSquareIntoHole(state, squareIndex);
         }
 
         return state;
