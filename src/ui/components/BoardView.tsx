@@ -36,7 +36,7 @@ export const BoardView = ({
   const shortSide = Math.min(windowWidth, windowHeight);
   const isTablet = shortSide >= 900;
   const maxByWidth = windowWidth - containerHorizontalPadding;
-  const maxByHeight = windowHeight - (isTablet ? 260 : 0);
+  const maxByHeight = windowHeight - (isTablet ? 120 : 0);
   const boardMax = isTablet ? Math.min(maxByWidth, maxByHeight) : 420;
   const boardSize = Math.min(boardMax, maxByWidth);
 

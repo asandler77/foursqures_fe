@@ -7,12 +7,15 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "test": "jest",
+    "pull:csv": "adb pull /sdcard/Android/data/com.foursquares_fe/files/datasets/games.csv datasets/games.csv",
+    "fill:results": "node scripts/fill-results.js"
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.83.1",
     "react": "19.2.0",
     "react-native": "0.83.1",
+    "react-native-fs": "^2.20.0",
     "react-native-safe-area-context": "^5.5.2",
     "reactotron-react-native": "^5.1.18"
   },

@@ -8,14 +8,19 @@ import { computeBestAction } from '../game/ai';
 import { createGame, placePiece, restartGame, slideSquare } from '../api/gameApi';
 import { BoardView } from '../ui/components/BoardView';
 import { Header } from '../ui/components/Header';
+import { appendCsvRows, getDefaultCsvFilePath } from '../utils/csvLogger';
 import { colors, spacing } from '../ui/theme';
 
-type PlayMode = 'local' | 'server';
+type PlayMode = 'local' | 'server' | 'ai';
 const SERVER_TURN_DELAY_MS = 2000;
 const SERVER_AI_SLIDE_DELAY_MS = 1000;
 const LOCAL_AI_MAX_DEPTH = 1;
 const LOCAL_AI_THINK_MS = 50;
 const LOCAL_AI_POST_TURN_DELAY_MS = 1500;
+const AI_VS_AI_DELAY_MS = 400;
+const GAME_OVER_DELAY_MS = 2000;
+const AI_SERIES_GAMES = 100;
+const AI_BETWEEN_GAMES_DELAY_MS = 2000;
 
 export const GameScreen = () => {
   const [localState, dispatch] = useReducer(reducer, undefined, () => createInitialState());
@@ -31,21 +36,109 @@ export const GameScreen = () => {
   const pendingApplyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isGameOverVisible, setIsGameOverVisible] = useState(false);
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gameOverDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiSeriesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiSeriesRemainingRef = useRef(0);
   const gameOverPulseRef = useRef(new Animated.Value(1));
+  const gameIdRef = useRef<string>(`game_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`);
+  const moveIndexRef = useRef(0);
+  const pendingRowsRef = useRef<string[][]>([]);
+  const csvFileRef = useRef<string>(getDefaultCsvFilePath());
 
   const activeState = mode === 'server' ? serverState : localState;
-  const isGameOver = !!activeState?.winner || !!activeState?.drawReason;
+  const hasWinnerOrDraw = !!activeState?.winner || !!activeState?.drawReason;
+  const isGameOver = isGameOverVisible;
   const winnerLabel = activeState?.winner === 'R' ? 'Player 1' : 'Player 2';
-  const gameOverText = activeState?.drawReason
-    ? 'Draw'
-    : activeState?.winner
-      ? `Winner: ${winnerLabel}`
-      : '';
+  const gameOverText = hasWinnerOrDraw
+    ? activeState?.drawReason
+      ? 'Draw'
+      : activeState?.winner
+        ? `Winner: ${winnerLabel}`
+        : ''
+    : '';
   const validDestinations = useMemo(
     () => (activeState ? getValidDestinationsForSelected(activeState) : []),
     [activeState],
   );
+
+  const resetGameLog = () => {
+    if (pendingRowsRef.current.length > 0) {
+      void finalizeGameLog('Aborted');
+    }
+    gameIdRef.current = `game_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+    moveIndexRef.current = 0;
+    pendingRowsRef.current = [];
+    csvFileRef.current =
+      mode === 'ai'
+        ? `${getDefaultCsvFilePath().replace('games.csv', '')}train_file_${gameIdRef.current}.csv`
+        : getDefaultCsvFilePath();
+  };
+
+  const flattenBoard = (board: GameState['board']) =>
+    board.flatMap(cell =>
+      cell.map(slot => (slot === 'R' ? 1 : slot === 'B' ? -1 : 0)),
+    );
+
+  const finalizeGameLog = async (result: string) => {
+    const rows = pendingRowsRef.current
+      .map(columns => {
+        const next = columns.slice();
+        if (next.length === 0) return '';
+        next[next.length - 1] = result;
+        return next.join(',');
+      })
+      .filter(row => row.length > 0);
+    pendingRowsRef.current = [];
+    try {
+      await appendCsvRows(csvFileRef.current, rows);
+    } catch (err) {
+      console.warn('Failed to write CSV rows', err);
+    }
+    if (mode === 'ai') {
+      gameIdRef.current = `game_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+      moveIndexRef.current = 0;
+      csvFileRef.current = `${getDefaultCsvFilePath().replace('games.csv', '')}train_file_${gameIdRef.current}.csv`;
+    }
+  };
+
+  const logLocalMove = (
+    prevState: GameState,
+    action: { squareIndex: number; slotIndex: number },
+    nextState: GameState,
+  ) => {
+    const actionType = prevState.phase === 'placement' ? 'place' : 'slide';
+    const actionA = action.squareIndex;
+    const actionB = actionType === 'place' ? action.slotIndex : -1;
+    const currentPlayerIsB = prevState.currentPlayer === 'B' ? 1 : 0;
+    const phasePlacement = prevState.phase === 'placement' ? 1 : 0;
+    const phasePlacementSlide = prevState.phase === 'placementSlide' ? 1 : 0;
+    const phaseMovement = prevState.phase === 'movement' ? 1 : 0;
+    const blockedSlideSquareIndex =
+      typeof prevState.blockedSlideSquareIndex === 'number' ? prevState.blockedSlideSquareIndex : -1;
+    const actionId = actionType === 'place' ? actionA * 4 + actionB : 36 + actionA;
+    const columns = [
+      gameIdRef.current,
+      moveIndexRef.current,
+      currentPlayerIsB,
+      phasePlacement,
+      phasePlacementSlide,
+      phaseMovement,
+      prevState.holeSquareIndex,
+      blockedSlideSquareIndex,
+      ...flattenBoard(prevState.board),
+      actionId,
+      '',
+    ];
+    pendingRowsRef.current.push(columns);
+    moveIndexRef.current += 1;
+
+    if (nextState.winner || nextState.drawReason) {
+      const result = nextState.winner ? nextState.winner : 'Draw';
+      void finalizeGameLog(result);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -61,9 +154,33 @@ export const GameScreen = () => {
         clearTimeout(aiTimeoutRef.current);
         aiTimeoutRef.current = null;
       }
+      if (aiSeriesTimeoutRef.current) {
+        clearTimeout(aiSeriesTimeoutRef.current);
+        aiSeriesTimeoutRef.current = null;
+      }
+      if (gameOverDelayRef.current) {
+        clearTimeout(gameOverDelayRef.current);
+        gameOverDelayRef.current = null;
+      }
       gameOverPulseRef.current.stopAnimation();
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasWinnerOrDraw) {
+      if (gameOverDelayRef.current) {
+        clearTimeout(gameOverDelayRef.current);
+        gameOverDelayRef.current = null;
+      }
+      setIsGameOverVisible(false);
+      return;
+    }
+    if (isGameOverVisible || gameOverDelayRef.current) return;
+    gameOverDelayRef.current = setTimeout(() => {
+      setIsGameOverVisible(true);
+      gameOverDelayRef.current = null;
+    }, GAME_OVER_DELAY_MS);
+  }, [hasWinnerOrDraw, isGameOverVisible]);
 
   useEffect(() => {
     if (!isGameOver) {
@@ -108,7 +225,77 @@ export const GameScreen = () => {
     const delay = Math.max(remaining, LOCAL_AI_POST_TURN_DELAY_MS);
 
     aiTimeoutRef.current = setTimeout(() => {
-      if (action) dispatch(action);
+      if (action) {
+        const next = reducer(localState, action);
+        if (next !== localState) {
+          logLocalMove(localState, action, next);
+          dispatch(action);
+        }
+      }
+      setIsAiThinking(false);
+      aiTimeoutRef.current = null;
+    }, delay);
+  }, [mode, localState, isAiThinking]);
+
+  useEffect(() => {
+    if (mode === 'ai') {
+      aiSeriesRemainingRef.current = AI_SERIES_GAMES;
+      if (aiSeriesTimeoutRef.current) {
+        clearTimeout(aiSeriesTimeoutRef.current);
+        aiSeriesTimeoutRef.current = null;
+      }
+      setLocalError(null);
+      resetGameLog();
+      dispatch({ type: 'restart' });
+    } else {
+      aiSeriesRemainingRef.current = 0;
+      if (aiSeriesTimeoutRef.current) {
+        clearTimeout(aiSeriesTimeoutRef.current);
+        aiSeriesTimeoutRef.current = null;
+      }
+      csvFileRef.current = getDefaultCsvFilePath();
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'ai') return;
+    if (!localState.winner && !localState.drawReason) return;
+    if (aiSeriesTimeoutRef.current) return;
+
+    const remaining = aiSeriesRemainingRef.current;
+    if (remaining <= 0) return;
+    aiSeriesRemainingRef.current = remaining - 1;
+
+    if (remaining <= 1) return;
+    aiSeriesTimeoutRef.current = setTimeout(() => {
+      dispatch({ type: 'restart' });
+      aiSeriesTimeoutRef.current = null;
+    }, AI_BETWEEN_GAMES_DELAY_MS);
+  }, [mode, localState]);
+
+  useEffect(() => {
+    if (mode !== 'ai') return;
+    if (localState.winner || localState.drawReason) return;
+    if (isAiThinking) return;
+
+    setIsAiThinking(true);
+    const startedAt = Date.now();
+    const action = computeBestAction(localState, localState.currentPlayer, {
+      maxDepth: LOCAL_AI_MAX_DEPTH,
+      timeLimitMs: LOCAL_AI_THINK_MS,
+    });
+    const elapsed = Date.now() - startedAt;
+    const remaining = Math.max(0, LOCAL_AI_THINK_MS - elapsed);
+    const delay = Math.max(remaining, AI_VS_AI_DELAY_MS);
+
+    aiTimeoutRef.current = setTimeout(() => {
+      if (action) {
+        const next = reducer(localState, action);
+        if (next !== localState) {
+          logLocalMove(localState, action, next);
+          dispatch(action);
+        }
+      }
       setIsAiThinking(false);
       aiTimeoutRef.current = null;
     }, delay);
@@ -194,8 +381,16 @@ export const GameScreen = () => {
   };
 
   const handleRestart = async () => {
-    if (mode === 'local') {
+    if (mode === 'local' || mode === 'ai') {
       setLocalError(null);
+      if (mode === 'ai') {
+        aiSeriesRemainingRef.current = AI_SERIES_GAMES;
+        if (aiSeriesTimeoutRef.current) {
+          clearTimeout(aiSeriesTimeoutRef.current);
+          aiSeriesTimeoutRef.current = null;
+        }
+      }
+      resetGameLog();
       dispatch({ type: 'restart' });
       return;
     }
@@ -247,9 +442,14 @@ export const GameScreen = () => {
         return;
       }
       setLocalError(null);
-      dispatch({ type: 'pressSlot', squareIndex, slotIndex });
+      const next = reducer(localState, { type: 'pressSlot', squareIndex, slotIndex });
+      if (next !== localState) {
+        logLocalMove(localState, { squareIndex, slotIndex }, next);
+        dispatch({ type: 'pressSlot', squareIndex, slotIndex });
+      }
       return;
     }
+    if (mode === 'ai') return;
     if (!serverInfo || !serverState || isLoading || turnCooldown) return;
     if (isRepeatMove) {
       setServerError('You cannot move the same square twice in a row.');
@@ -335,6 +535,18 @@ export const GameScreen = () => {
               <Text
                 style={[styles.modeButtonText, mode === 'server' && styles.modeButtonTextActive]}>
                 Server
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setMode('ai')}
+              style={({ pressed }) => [
+                styles.modeButton,
+                mode === 'ai' && styles.modeButtonActive,
+                pressed && styles.modeButtonPressed,
+              ]}>
+              <Text style={[styles.modeButtonText, mode === 'ai' && styles.modeButtonTextActive]}>
+                AI
               </Text>
             </Pressable>
           </View>
