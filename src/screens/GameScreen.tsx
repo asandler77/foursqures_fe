@@ -3,7 +3,7 @@ import { Animated, Pressable, StatusBar, StyleSheet, Text, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createInitialState, getValidDestinationsForSelected, reducer } from '../game/engine';
-import type { GameState } from '../game/types';
+import type { GameAction, GameState } from '../game/types';
 import { computeBestAction } from '../game/ai';
 import { createGame, placePiece, restartGame, slideSquare } from '../api/gameApi';
 import { BoardView } from '../ui/components/BoardView';
@@ -14,13 +14,16 @@ import { colors, spacing } from '../ui/theme';
 type PlayMode = 'local' | 'server' | 'ai';
 const SERVER_TURN_DELAY_MS = 2000;
 const SERVER_AI_SLIDE_DELAY_MS = 1000;
-const LOCAL_AI_MAX_DEPTH = 1;
-const LOCAL_AI_THINK_MS = 50;
+const LOCAL_AI_MAX_DEPTH = 4;
+const AI_MODE_MAX_DEPTH_R = 7;
+const AI_MODE_MAX_DEPTH_B = 7;
+const AI_MODE_NOISE = 0;
+const LOCAL_AI_THINK_MS = 100;
 const LOCAL_AI_POST_TURN_DELAY_MS = 1500;
 const AI_VS_AI_DELAY_MS = 400;
 const GAME_OVER_DELAY_MS = 2000;
 const AI_SERIES_GAMES = 100;
-const AI_BETWEEN_GAMES_DELAY_MS = 2000;
+const AI_BETWEEN_GAMES_DELAY_MS = 3000;
 
 export const GameScreen = () => {
   const [localState, dispatch] = useReducer(reducer, undefined, () => createInitialState());
@@ -37,14 +40,18 @@ export const GameScreen = () => {
   const [localError, setLocalError] = useState<string | null>(null);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [isGameOverVisible, setIsGameOverVisible] = useState(false);
+  const [aiWinsR, setAiWinsR] = useState(0);
+  const [aiWinsB, setAiWinsB] = useState(0);
+  const [aiDraws, setAiDraws] = useState(0);
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gameOverDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiSeriesTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiSeriesRemainingRef = useRef(0);
+  const aiCountedGameIdRef = useRef<string | null>(null);
   const gameOverPulseRef = useRef(new Animated.Value(1));
   const gameIdRef = useRef<string>(`game_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`);
   const moveIndexRef = useRef(0);
-  const pendingRowsRef = useRef<string[][]>([]);
+  const pendingRowsRef = useRef<Array<Array<string | number>>>([]);
   const csvFileRef = useRef<string>(getDefaultCsvFilePath());
 
   const activeState = mode === 'server' ? serverState : localState;
@@ -72,7 +79,7 @@ export const GameScreen = () => {
     pendingRowsRef.current = [];
     csvFileRef.current =
       mode === 'ai'
-        ? `${getDefaultCsvFilePath().replace('games.csv', '')}train_file_${gameIdRef.current}.csv`
+        ? `${getDefaultCsvFilePath().replace('games.csv', '')}train10_${gameIdRef.current}.csv`
         : getDefaultCsvFilePath();
   };
 
@@ -99,15 +106,12 @@ export const GameScreen = () => {
     if (mode === 'ai') {
       gameIdRef.current = `game_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
       moveIndexRef.current = 0;
-      csvFileRef.current = `${getDefaultCsvFilePath().replace('games.csv', '')}train_file_${gameIdRef.current}.csv`;
+      csvFileRef.current = `${getDefaultCsvFilePath().replace('games.csv', '')}train10_${gameIdRef.current}.csv`;
     }
   };
 
-  const logLocalMove = (
-    prevState: GameState,
-    action: { squareIndex: number; slotIndex: number },
-    nextState: GameState,
-  ) => {
+  const logLocalMove = (prevState: GameState, action: GameAction, nextState: GameState) => {
+    if (action.type !== 'pressSlot') return;
     const actionType = prevState.phase === 'placement' ? 'place' : 'slide';
     const actionA = action.squareIndex;
     const actionB = actionType === 'place' ? action.slotIndex : -1;
@@ -240,6 +244,10 @@ export const GameScreen = () => {
   useEffect(() => {
     if (mode === 'ai') {
       aiSeriesRemainingRef.current = AI_SERIES_GAMES;
+      aiCountedGameIdRef.current = null;
+      setAiWinsR(0);
+      setAiWinsB(0);
+      setAiDraws(0);
       if (aiSeriesTimeoutRef.current) {
         clearTimeout(aiSeriesTimeoutRef.current);
         aiSeriesTimeoutRef.current = null;
@@ -275,14 +283,34 @@ export const GameScreen = () => {
 
   useEffect(() => {
     if (mode !== 'ai') return;
+    if (!localState.winner && !localState.drawReason) return;
+    const currentGameId = gameIdRef.current;
+    if (aiCountedGameIdRef.current === currentGameId) return;
+    aiCountedGameIdRef.current = currentGameId;
+    if (localState.winner === 'R') {
+      setAiWinsR(prev => prev + 1);
+      return;
+    }
+    if (localState.winner === 'B') {
+      setAiWinsB(prev => prev + 1);
+      return;
+    }
+    setAiDraws(prev => prev + 1);
+  }, [mode, localState]);
+
+  useEffect(() => {
+    if (mode !== 'ai') return;
     if (localState.winner || localState.drawReason) return;
     if (isAiThinking) return;
 
     setIsAiThinking(true);
     const startedAt = Date.now();
+    const maxDepth =
+      localState.currentPlayer === 'R' ? AI_MODE_MAX_DEPTH_R : AI_MODE_MAX_DEPTH_B;
     const action = computeBestAction(localState, localState.currentPlayer, {
-      maxDepth: LOCAL_AI_MAX_DEPTH,
+      maxDepth,
       timeLimitMs: LOCAL_AI_THINK_MS,
+      noiseAmplitude: AI_MODE_NOISE,
     });
     const elapsed = Date.now() - startedAt;
     const remaining = Math.max(0, LOCAL_AI_THINK_MS - elapsed);
@@ -442,10 +470,11 @@ export const GameScreen = () => {
         return;
       }
       setLocalError(null);
-      const next = reducer(localState, { type: 'pressSlot', squareIndex, slotIndex });
+      const action: GameAction = { type: 'pressSlot', squareIndex, slotIndex };
+      const next = reducer(localState, action);
       if (next !== localState) {
-        logLocalMove(localState, { squareIndex, slotIndex }, next);
-        dispatch({ type: 'pressSlot', squareIndex, slotIndex });
+        logLocalMove(localState, action, next);
+        dispatch(action);
       }
       return;
     }
@@ -550,6 +579,14 @@ export const GameScreen = () => {
               </Text>
             </Pressable>
           </View>
+          {mode === 'ai' ? (
+            <Text style={styles.aiScoreLabel}>
+              AI wins —{' '}
+              <Text style={styles.aiScoreRed}>Red: {aiWinsR}</Text>{' '}
+              <Text style={styles.aiScoreBlue}>Blue: {aiWinsB}</Text>{' '}
+              <Text style={styles.aiScoreDraw}>Draw: {aiDraws}</Text>
+            </Text>
+          ) : null}
           <Animated.Text
             style={[
               styles.gameOverText,
@@ -625,5 +662,14 @@ const styles = StyleSheet.create({
   },
   gameOverTextRed: { color: colors.red },
   gameOverTextBlue: { color: colors.blue },
+  aiScoreLabel: {
+    marginTop: 6,
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  aiScoreRed: { color: colors.red },
+  aiScoreBlue: { color: colors.blue },
+  aiScoreDraw: { color: colors.text },
 });
 

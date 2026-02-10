@@ -1,10 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { GameState, Player } from '../../game/types';
+import type { GameState } from '../../game/types';
 import { getRemainingPieces } from '../../game/engine';
 import { colors } from '../theme';
-
-const playerName = (p: Player) => (p === 'R' ? 'Player 1' : 'Player 2');
 
 type Props = Readonly<{
   state: GameState;

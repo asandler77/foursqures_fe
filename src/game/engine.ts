@@ -105,6 +105,17 @@ export const reducer = (state: GameState, action: GameAction): GameState => {
               : 'placement'
             : 'movement';
 
+        if (totalPlaced >= totalPieces && nextPhase === 'movement') {
+          return {
+            ...s,
+            board: nextBoard,
+            holeSquareIndex: nextHoleSquareIndex,
+            selectedSquareIndex: null,
+            lastMovedSquareIndex: nextLastMovedSquareIndex,
+            drawReason: 'All pieces placed',
+          };
+        }
+
         return {
           ...s,
           board: nextBoard,

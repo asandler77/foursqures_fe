@@ -3,6 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { Animated, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { Board, Pos } from '../../game/types';
 import { colors } from '../theme';
+import { getBoardLayout } from '../../utils/boardLayout';
 import { Slot } from './Slot';
 
 const INNER_TILE_PADDING = 6;
@@ -33,21 +34,12 @@ export const BoardView = ({
   const validSet = useMemo(() => new Set(validDestinations.map(keyOf)), [validDestinations]);
 
   const containerHorizontalPadding = 32; // GameScreen uses padding 16 left/right
-  const shortSide = Math.min(windowWidth, windowHeight);
-  const isTablet = shortSide >= 900;
-  const maxByWidth = windowWidth - containerHorizontalPadding;
-  const maxByHeight = windowHeight - (isTablet ? 120 : 0);
-  const boardMax = isTablet ? Math.min(maxByWidth, maxByHeight) : 420;
-  const boardSize = Math.min(boardMax, maxByWidth);
-
-  const bigGap = 10;
-  const bigCellSize = (boardSize - bigGap * 2) / 3;
-  const bigCellPadding = 10;
-
-  const innerGap = 8;
-  const innerSize = bigCellSize - bigCellPadding * 2;
-  const innerContentSize = innerSize - INNER_TILE_PADDING * 2;
-  const slotSize = (innerContentSize - innerGap) / 2;
+  const { boardSize, bigGap, bigCellSize, bigCellPadding, innerGap, slotSize } = getBoardLayout({
+    windowWidth,
+    windowHeight,
+    containerHorizontalPadding,
+    innerTilePadding: INNER_TILE_PADDING,
+  });
 
   const prevHoleRef = useRef<number>(holeSquareIndex);
   const animMapRef = useRef<Map<number, Animated.ValueXY>>(new Map());
