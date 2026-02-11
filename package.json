@@ -9,6 +9,8 @@
     "start": "react-native start",
     "test": "jest",
     "pull:csv": "adb pull /sdcard/Android/data/com.foursquares_fe/files/datasets/games.csv datasets/games.csv",
+    "pull:csv:emulator": "adb -s emulator-5554 pull /sdcard/Android/data/com.foursquares_fe/files/datasets/. datasets",
+    "pull:csv:all": "adb pull /sdcard/Android/data/com.foursquares_fe/files/datasets/. datasets",
     "fill:results": "node scripts/fill-results.js"
   },
   "dependencies": {

@@ -22,7 +22,7 @@ const getSlotAt = (board: GameState['board'], globalRow: number, globalCol: numb
   return board[squareIndex]?.[slotIndex] ?? null;
 };
 
-const hasImmediateWin = (state: GameState, player: Player): boolean => {
+export const hasImmediateWin = (state: GameState, player: Player): boolean => {
   const stateForPlayer =
     state.currentPlayer === player ? state : { ...state, currentPlayer: player };
   const actions = getPossibleActions(stateForPlayer);
@@ -31,6 +31,18 @@ const hasImmediateWin = (state: GameState, player: Player): boolean => {
     if (next.winner === player) return true;
   }
   return false;
+};
+
+const getImmediateWinActions = (state: GameState, player: Player): GameAction[] => {
+  const stateForPlayer =
+    state.currentPlayer === player ? state : { ...state, currentPlayer: player };
+  const actions = getPossibleActions(stateForPlayer);
+  const winning: GameAction[] = [];
+  for (const action of actions) {
+    const next = reducer(stateForPlayer, action);
+    if (next.winner === player) winning.push(action);
+  }
+  return winning;
 };
 
 const evaluateState = (state: GameState, perspective: Player): number => {
@@ -133,7 +145,10 @@ export const computeBestAction = (
 
   const actions = getPossibleActions(state);
   if (actions.length === 0) return null;
-  if (aiPlayer === 'R' && state.currentPlayer === 'R' && state.placed.R === 0) {
+  const isFirstMove =
+    (aiPlayer === 'R' && state.currentPlayer === 'R' && state.placed.R === 0) ||
+    (aiPlayer === 'B' && state.currentPlayer === 'B' && state.placed.B === 0);
+  if (isFirstMove) {
     return actions[Math.floor(Math.random() * actions.length)];
   }
   for (const action of actions) {
@@ -141,6 +156,29 @@ export const computeBestAction = (
     if (next !== state && next.winner === aiPlayer) {
       return action;
     }
+  }
+  if (hasImmediateWin(state, otherPlayer(aiPlayer))) {
+    const opponentWinActions = getImmediateWinActions(state, otherPlayer(aiPlayer));
+    for (const action of actions) {
+      if (action.type !== 'pressSlot') continue;
+      const blocks = opponentWinActions.some(
+        ow => ow.type === 'pressSlot' && ow.squareIndex === action.squareIndex && ow.slotIndex === action.slotIndex,
+      );
+      if (blocks) {
+        const next = reducer(state, action);
+        if (next !== state && !hasImmediateWin(next, otherPlayer(aiPlayer))) return action;
+      }
+    }
+    for (const action of actions) {
+      const next = reducer(state, action);
+      if (next === state) continue;
+      if (!hasImmediateWin(next, otherPlayer(aiPlayer))) return action;
+    }
+  }
+  for (const action of actions) {
+    const next = reducer(state, action);
+    if (next === state) continue;
+    if (hasImmediateWin(next, aiPlayer)) return action;
   }
   if (RANDOM_MOVE_CHANCE > 0 && Math.random() < RANDOM_MOVE_CHANCE) {
     return actions[Math.floor(Math.random() * actions.length)];

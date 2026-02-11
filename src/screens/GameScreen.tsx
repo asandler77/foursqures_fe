@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { createInitialState, getValidDestinationsForSelected, reducer } from '../game/engine';
 import type { GameAction, GameState } from '../game/types';
-import { computeBestAction } from '../game/ai';
+import { computeBestAction, hasImmediateWin } from '../game/ai';
 import { createGame, placePiece, restartGame, slideSquare } from '../api/gameApi';
 import { BoardView } from '../ui/components/BoardView';
 import { Header } from '../ui/components/Header';
@@ -69,6 +69,15 @@ export const GameScreen = () => {
     () => (activeState ? getValidDestinationsForSelected(activeState) : []),
     [activeState],
   );
+
+  const threatLabels = useMemo(() => {
+    if (mode !== 'local' || !localState || localState.winner || localState.drawReason) return [];
+    if (isAiThinking) return [];
+    const labels: string[] = [];
+    if (hasImmediateWin(localState, 'R')) labels.push('Red can win next move');
+    if (hasImmediateWin(localState, 'B')) labels.push('Blue can win next move');
+    return labels;
+  }, [mode, localState, isAiThinking]);
 
   const resetGameLog = () => {
     if (pendingRowsRef.current.length > 0) {
@@ -579,6 +588,15 @@ export const GameScreen = () => {
               </Text>
             </Pressable>
           </View>
+          {threatLabels.length > 0 ? (
+            <View style={styles.threatRow}>
+              {threatLabels.map((label, i) => (
+                <Text key={i} style={styles.threatText}>
+                  {label}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           {mode === 'ai' ? (
             <Text style={styles.aiScoreLabel}>
               AI wins —{' '}
@@ -653,6 +671,14 @@ const styles = StyleSheet.create({
   modeButtonPressed: { opacity: 0.85 },
   modeButtonText: { color: colors.text, fontWeight: '700', fontSize: 12 },
   modeButtonTextActive: { color: 'white' },
+  threatRow: {
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.textMuted,
+  },
+  threatText: { fontSize: 13, fontWeight: '600', color: colors.white },
   errorText: { textAlign: 'center', color: colors.red, fontSize: 14 },
   gameOverText: {
     textAlign: 'center',
